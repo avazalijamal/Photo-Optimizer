@@ -344,7 +344,7 @@ class IMAGELOGO
                             if (file_exists($newFilePath)) {
                                 echo $this->colorize("File exists: $this->fileCount ) $newFilePath \n", "red");
                             } else {
-                                // echo $this->colorize("Warning : $this->fileCount ) $newFilePath \n", "yellow");
+                                echo $this->colorize("Warning : $this->fileCount ) $newFilePath \n", "yellow");
                                 $this->readImage($filePath)->writeWebpOptimization($newFilePath);
                                 echo $this->colorize("File does not exist: $this->fileCount ) $newFilePath \n", "green");
                             }
