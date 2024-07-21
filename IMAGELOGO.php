@@ -351,21 +351,25 @@ class IMAGELOGO
                         else {
                             if (!is_dir($newDirectoryPath))
                                 mkdir($newDirectoryPath, 0777, true);
+
                             $this->fileCount++;
 
-                            if ($this->isImage($filePath)) {
-                                if ($this->fileStatus) {
-                                    $this->readImage($filePath)->writeWebpOptimization($newFilePath);
-                                    echo $this->colorize("Convert is Success: $this->fileCount ) $newFilePath \n", "green");
-                                } else {
-                                    $this->moveFileToDirectory($filePath, $newFilePath, $newDirectoryPath);
-                                    echo $this->colorize("File is Corrupted: $this->fileCount ) $newFilePath \n", "red");
-                                }
+                            if (file_exists($newFilePath)) {
+                                echo $this->colorize("File is Exists: $this->fileCount ) $newFilePath \n", "blue");
                             } else {
-                                $this->copyFileToDirectory($filePath, $newFilePath, $newDirectoryPath);
-                                echo $this->colorize("File is not Photo: $this->fileCount ) $newFilePath \n", "yellow");
+                                if ($this->isImage($filePath)) {
+                                    if ($this->fileStatus) {
+                                        $this->readImage($filePath)->writeWebpOptimization($newFilePath);
+                                        echo $this->colorize("Convert is Success: $this->fileCount ) $newFilePath \n", "green");
+                                    } else {
+                                        $this->moveFileToDirectory($filePath, $newFilePath, $newDirectoryPath);
+                                        echo $this->colorize("File is Corrupted: $this->fileCount ) $newFilePath \n", "red");
+                                    }
+                                } else {
+                                    $this->copyFileToDirectory($filePath, $newFilePath, $newDirectoryPath);
+                                    echo $this->colorize("File is not Photo: $this->fileCount ) $newFilePath \n", "yellow");
+                                }
                             }
-
                         }
                     }
                 }
