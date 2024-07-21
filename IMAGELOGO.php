@@ -27,7 +27,6 @@ class IMAGELOGO
     protected $HEIGHT;
     protected $newUri;
     protected $fileCount = 0;
-
     protected const colors = [
         'black' => '0;30',
         'red' => '0;31',
@@ -46,10 +45,16 @@ class IMAGELOGO
         'bold_cyan' => '1;36',
         'bold_white' => '1;37',
     ];
+    protected $photoUrl;
+    protected $fileStatus = true;
+    protected $src = "./src";
+    protected $dist = "./dist";
+    protected $problem = "./problem";
 
 
     function __construct($url)
     {
+        ini_set('memory_limit', '5G');
         $this->logoUrl = $url;
         $this->sizeLogo = getimagesize($this->logoUrl);
         $this->tempLogo = imagecreatefrompng($this->logoUrl);
@@ -57,15 +62,19 @@ class IMAGELOGO
         $this->width = $this->sizeLogo[0];
         $this->height = $this->sizeLogo[1];
 
+        $this->createDirectoryIfNotExists($this->src);
+        $this->createDirectoryIfNotExists($this->dist);
+        $this->createDirectoryIfNotExists($this->problem);
     }
-
     public function readImage($uri)
     {
         $this->photoUrl = $uri;
         $this->sizePhoto = getimagesize($this->photoUrl);
         $this->WIDTH = $this->sizePhoto[0];
         $this->HEIGHT = $this->sizePhoto[1];
+
         $this->tempImg = imagecreatefromstring(file_get_contents($this->photoUrl));
+
         /*
             $photoTemp=imagecreatefromwebp($photo);//webp+
             $photoTemp=imagecreatefromjpeg($photo);//jpeg,jpg+
@@ -161,17 +170,14 @@ class IMAGELOGO
     }
     public function writeWebpOptimization($newUri)
     {
-
         $this->newUri = $newUri;
         $this->createCtx()->writeImage();
-
 
         imagewebp($this->ctx, $this->newUri);
 
         $this->removeCtx();
 
         return $this;
-
     }
     public function writePng($newUri)
     {
@@ -314,8 +320,10 @@ class IMAGELOGO
             return true;
         }
     }
-    public function directoryContentOptimization($directory, $level = 0)
+    public function directoryContentOptimization($directory = null, $level = 0)
     {
+        $directory = is_null($directory) ? $this->src : $directory;
+
         if (is_dir($directory)) {
             if ($dh = opendir($directory)) {
                 while (($file = readdir($dh)) !== false) {
@@ -323,30 +331,39 @@ class IMAGELOGO
                         $filePath = $directory . DIRECTORY_SEPARATOR . $file;
                         $directoryPath = dirname($filePath);
 
-                        $newDirectoryPath = (strpos($directoryPath, './src') === 0) ? str_replace('./src', './dist', $directoryPath) : $directoryPath;
-
-                        $newFilePath = $newDirectoryPath . DIRECTORY_SEPARATOR . $file . '.webp';
+                        if ($this->isImage($filePath)) {
+                            if ($this->isNotFileCorrupted($filePath)) {
+                                $this->fileStatus = true;
+                                $newDirectoryPath = (strpos($directoryPath, $this->src) === 0) ? str_replace($this->src, $this->dist, $directoryPath) : $directoryPath;
+                                $newFilePath = $newDirectoryPath . DIRECTORY_SEPARATOR . $file . '.webp';
+                            } else {
+                                $this->fileStatus = false;
+                                $newDirectoryPath = (strpos($directoryPath, $this->src) === 0) ? str_replace($this->src, $this->problem, $directoryPath) : $directoryPath;
+                                $newFilePath = $newDirectoryPath . DIRECTORY_SEPARATOR . $file;
+                            }
+                        } else {
+                            $newDirectoryPath = (strpos($directoryPath, $this->src) === 0) ? str_replace($this->src, $this->dist, $directoryPath) : $directoryPath;
+                            $newFilePath = $newDirectoryPath . DIRECTORY_SEPARATOR . $file;
+                        }
 
                         if (is_dir($filePath))
                             $this->directoryContentOptimization($filePath, $level + 1);
                         else {
                             if (!is_dir($newDirectoryPath))
                                 mkdir($newDirectoryPath, 0777, true);
-                            // echo $filePath;
-                            // echo "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp";
-                            // echo $directoryPath;
-                            // echo "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp";
-                            // echo "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp";
-                            // echo $newDirectoryPath;
-                            // echo "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp";
-                            // echo "<br/>";
                             $this->fileCount++;
-                            if (file_exists($newFilePath)) {
-                                echo $this->colorize("File exists: $this->fileCount ) $newFilePath \n", "red");
+
+                            if ($this->isImage($filePath)) {
+                                if ($this->fileStatus) {
+                                    $this->readImage($filePath)->writeWebpOptimization($newFilePath);
+                                    echo $this->colorize("Convert is Success: $this->fileCount ) $newFilePath \n", "green");
+                                } else {
+                                    $this->moveFileToDirectory($filePath, $newFilePath, $newDirectoryPath);
+                                    echo $this->colorize("File is Corrupted: $this->fileCount ) $newFilePath \n", "red");
+                                }
                             } else {
-                                echo $this->colorize("Warning : $this->fileCount ) $newFilePath \n", "yellow");
-                                $this->readImage($filePath)->writeWebpOptimization($newFilePath);
-                                echo $this->colorize("File does not exist: $this->fileCount ) $newFilePath \n", "green");
+                                $this->copyFileToDirectory($filePath, $newFilePath, $newDirectoryPath);
+                                echo $this->colorize("File is not Photo: $this->fileCount ) $newFilePath \n", "yellow");
                             }
 
                         }
@@ -354,15 +371,71 @@ class IMAGELOGO
                 }
                 closedir($dh);
             } else {
-                echo "Qovluq açılamadı: $directory<br/>";
+                echo "Directory is not Open: $directory<br/>";
             }
         } else {
-            echo "Qovluq mevcut deyil: $directory<br/>";
+            echo "Directory is not Exists: $directory<br/>";
         }
     }
     protected function colorize($text, $color)
     {
         return "\033[" . self::colors[$color] . "m" . $text . "\033[0m";
+    }
+    public function isImage($filePath)
+    {
+        $fileMimeType = mime_content_type($filePath);
+        $imageMimeTypes = [
+            'image/jpeg',
+            'image/png',
+            'image/gif',
+            'image/webp',
+            'image/bmp',
+            'image/vnd.microsoft.icon',
+            'image/x-icon',
+            'image/svg+xml',
+            'image/tiff',
+            'image/x-tiff',
+            'image/heif',
+            'image/heic',
+            'image/jp2',
+            'image/jpx',
+            'image/jpm',
+            'image/x-jng',
+            'image/x-mng',
+            'image/x-xbitmap'
+        ];
+        return in_array($fileMimeType, $imageMimeTypes) ? true : false;
+    }
+    public function moveFileToDirectory($filePath, $newFilePath, $newDirectoryPath)
+    {
+        if (!is_dir($newDirectoryPath))
+            mkdir($newDirectoryPath, 0777, true);
+
+        return rename($filePath, $newFilePath) ? true : false;
+    }
+    public function copyFileToDirectory($filePath, $newFilePath, $newDirectoryPath)
+    {
+        if (!is_dir($newDirectoryPath))
+            mkdir($newDirectoryPath, 0777, true);
+
+        return copy($filePath, $newFilePath) ? true : false;
+    }
+    public function createDirectoryIfNotExists($path)
+    {
+        //Qovluğunun mövcudluğunu yoxlayırıq, yoxdursa yaradırıq
+        if (!is_dir($path)) {
+            if (mkdir($path, 0777, true)) {
+                return $this->colorize("Directory created: $path\n", "green");
+            } else {
+                return $this->colorize("Failed to create directory: $path\n", "red");
+            }
+        } else {
+            return $this->colorize("Directory already exists: $path\n", "yellow");
+        }
+    }
+    public function isNotFileCorrupted($filePath)
+    {
+        return imagecreatefromstring(file_get_contents($filePath)) ? true : false;
     }
 
 }
